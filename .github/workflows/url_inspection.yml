@@ -32,3 +32,11 @@ jobs:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python inspect_urls.py
+
+      - name: Upload CSV Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: url-inspection-csv
+          path: "*.csv"
+          if-no-files-found: ignore

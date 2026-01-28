@@ -152,34 +152,64 @@ def main():
             print("DRY RUN ENABLED. The following URLs would be inspected:")
             for url in all_urls:
                 print(f" - {url}")
-            print("Dry run complete. No API calls made to GSC or Drive/Sheets.")
+            print("Dry run complete. No API calls made to GSC or Sheets.")
             return
 
-        # 2. Create Spreadsheet
-        spreadsheet_id = create_google_sheet(sheets_service)
+        # 2. Try to Create Spreadsheet
+        spreadsheet_id = None
+        csv_mode = False
+        try:
+            spreadsheet_id = create_google_sheet(sheets_service)
+        except Exception as e:
+            print(f"\n[WARNING] Google Sheets creation failed: {e}")
+            print("Falling back to CSV creation...\n")
+            csv_mode = True
         
-        # 3. Inspect and Append
-        batch_size = 5 # Small batches to avoid timeout and show progress
+        # 3. Inspect URLs
+        all_rows = []
+        headers = [
+            "Inspection Date", "URL", "Verdict", "Coverage State", 
+            "Robots Txt State", "Indexing State", "Last Crawl Time", 
+            "Page Fetch State", "Google Canonical", "User Canonical"
+        ]
+        
+        batch_size = 5
         for i in range(0, len(all_urls), batch_size):
             batch = all_urls[i:i+batch_size]
-            rows = []
+            batch_rows = []
             for url in batch:
                 print(f"Inspecting: {url}")
                 row = inspect_url(search_service, url)
-                rows.append(row)
-                # Respect API quotas (approx 2000 per property per day, but let's be safe)
+                batch_rows.append(row)
+                all_rows.append(row)
                 time.sleep(1) 
             
-            sheets_service.spreadsheets().values().append(
-                spreadsheetId=spreadsheet_id,
-                range="Sheet1!A2",
-                valueInputOption="RAW",
-                body={"values": rows}
-            ).execute()
-            print(f"Appended {len(rows)} rows to Google Sheet.")
+            if not csv_mode and spreadsheet_id:
+                try:
+                    sheets_service.spreadsheets().values().append(
+                        spreadsheetId=spreadsheet_id,
+                        range="Sheet1!A2",
+                        valueInputOption="RAW",
+                        body={"values": batch_rows}
+                    ).execute()
+                    print(f"Appended {len(batch_rows)} rows to Google Sheet.")
+                except Exception as e:
+                    print(f"Failed to append to Google Sheet: {e}. Switching to CSV fallback for remaining rows.")
+                    csv_mode = True
             
-        print("Success! URL Inspection complete.")
-        
+        # 4. Final CSV Export if in CSV mode
+        if csv_mode:
+            import csv
+            today_str = datetime.now().strftime("%d%b-%Y").lower()
+            csv_filename = f"wordsolverx-{today_str}.csv"
+            with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerows(all_rows)
+            print(f"\nSuccess! Results saved to local file: {csv_filename}")
+        else:
+            print("\nSuccess! Results saved to Google Sheets.")
+            
     except Exception as e:
         print(f"Fatal Error: {e}")
 
