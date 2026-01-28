@@ -13,7 +13,8 @@ PAGES_FILE = "pages.txt"
 # Scopes
 SCOPES = [
     'https://www.googleapis.com/auth/webmasters.readonly',
-    'https://www.googleapis.com/auth/spreadsheets'
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive.file'
 ]
 
 def get_credentials():
@@ -62,25 +63,37 @@ def create_google_sheet(sheets_service):
     }
     
     # Create the spreadsheet directly
-    file = sheets_service.spreadsheets().create(body=spreadsheet, fields='spreadsheetId').execute()
-    spreadsheet_id = file.get('spreadsheetId')
-    print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
-    
-    # Initialize the sheet with headers
-    headers = [
-        "Inspection Date", "URL", "Verdict", "Coverage State", 
-        "Robots Txt State", "Indexing State", "Last Crawl Time", 
-        "Page Fetch State", "Google Canonical", "User Canonical"
-    ]
-    
-    sheets_service.spreadsheets().values().append(
-        spreadsheetId=spreadsheet_id,
-        range="Sheet1!A1",
-        valueInputOption="RAW",
-        body={"values": [headers]}
-    ).execute()
-    
-    return spreadsheet_id
+    try:
+        file = sheets_service.spreadsheets().create(body=spreadsheet, fields='spreadsheetId').execute()
+        spreadsheet_id = file.get('spreadsheetId')
+        print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
+        
+        # Initialize the sheet with headers
+        headers = [
+            "Inspection Date", "URL", "Verdict", "Coverage State", 
+            "Robots Txt State", "Indexing State", "Last Crawl Time", 
+            "Page Fetch State", "Google Canonical", "User Canonical"
+        ]
+        
+        sheets_service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range="Sheet1!A1",
+            valueInputOption="RAW",
+            body={"values": [headers]}
+        ).execute()
+        
+        return spreadsheet_id
+    except Exception as e:
+        if "403" in str(e):
+            print("\n" + "!"*50)
+            print("PERMISSION ERROR (403): The Service Account missing permissions.")
+            print("ACTION REQUIRED:")
+            print("1. Go to Google Cloud Console -> APIs & Services -> Library.")
+            print("2. Search for 'Google Sheets API' and ensure it's ENABLED.")
+            print("3. Search for 'Google Drive API' and ensure it's ALSO ENABLED (required for creating sheets).")
+            print("4. Ensure your Service Account belongs to the SAME project where you enabled these APIs.")
+            print("!"*50 + "\n")
+        raise e
 
 def inspect_url(search_service, url):
     try:
