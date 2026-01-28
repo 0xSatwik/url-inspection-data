@@ -64,25 +64,31 @@ def create_google_sheet(drive_service, sheets_service):
     }
     
     # Create the spreadsheet in the specific folder
-    file = drive_service.files().create(body=file_metadata, fields='id').execute()
-    spreadsheet_id = file.get('id')
-    print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
-    
-    # Initialize the sheet with headers
-    headers = [
-        "Inspection Date", "URL", "Verdict", "Coverage State", 
-        "Robots Txt State", "Indexing State", "Last Crawl Time", 
-        "Page Fetch State", "Google Canonical", "User Canonical"
-    ]
-    
-    sheets_service.spreadsheets().values().append(
-        spreadsheetId=spreadsheet_id,
-        range="Sheet1!A1",
-        valueInputOption="RAW",
-        body={"values": [headers]}
-    ).execute()
-    
-    return spreadsheet_id
+    try:
+        file = drive_service.files().create(body=file_metadata, fields='id').execute()
+        spreadsheet_id = file.get('id')
+        print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
+        
+        # Initialize the sheet with headers
+        headers = [
+            "Inspection Date", "URL", "Verdict", "Coverage State", 
+            "Robots Txt State", "Indexing State", "Last Crawl Time", 
+            "Page Fetch State", "Google Canonical", "User Canonical"
+        ]
+        
+        sheets_service.spreadsheets().values().append(
+            spreadsheetId=spreadsheet_id,
+            range="Sheet1!A1",
+            valueInputOption="RAW",
+            body={"values": [headers]}
+        ).execute()
+        
+        return spreadsheet_id
+    except Exception as e:
+        if "File not found" in str(e):
+            print(f"CRITICAL ERROR: Folder ID {DRIVE_FOLDER_ID} not found or access denied.")
+            print("Please ensure the Service Account email is added as an 'Editor' to the Google Drive folder.")
+        raise e
 
 def inspect_url(search_service, url):
     try:
