@@ -101,11 +101,11 @@ def create_google_sheet(sheets_service):
             print("!"*50 + "\n")
         raise e
 
-def inspect_url(search_service, url):
+def inspect_url(search_service, url, site_url):
     try:
         request = {
             'inspectionUrl': url,
-            'siteUrl': SITE_URL
+            'siteUrl': site_url
         }
         response = search_service.urlInspection().index().inspect(body=request).execute()
         result = response.get('inspectionResult', {})
@@ -129,6 +129,34 @@ def inspect_url(search_service, url):
         print(f"Error inspecting {url}: {e}")
         return [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), url, "ERROR", str(e), "", "", "", "", "", ""]
 
+def find_verified_property(service):
+    """
+    Finds the correct siteUrl from the authenticated user's GSC account.
+    Handles sc-domain: vs https:// prefixes.
+    """
+    try:
+        site_list = service.sites().list().execute()
+        sites = site_list.get('siteEntry', [])
+        
+        print("\nChecking verified GSC properties...")
+        
+        # 1. Look for exact match first
+        for site in sites:
+            site_url = site['siteUrl']
+            permission = site['permissionLevel']
+            print(f" - Found property: {site_url} (Access: {permission})")
+            
+            if "wordsolverx.com" in site_url and permission != "siteRestrictedUser":
+                return site_url
+
+        print("ERROR: Could not find a GSC property for 'wordsolverx.com' in this Service Account.")
+        print("Please ensure you have added the Service Account email as an 'Owner' or 'Full User' to the property in Google Search Console.")
+        return None
+        
+    except Exception as e:
+        print(f"Error listing sites: {e}")
+        return None
+
 def main():
     print("Starting URL Inspection script...")
     dry_run = os.environ.get('DRY_RUN', 'false').lower() == 'true'
@@ -137,6 +165,14 @@ def main():
         creds = get_credentials()
         search_service = build('searchconsole', 'v1', credentials=creds)
         sheets_service = build('sheets', 'v4', credentials=creds)
+        
+        # 0. Find Correct Site URL
+        print("Verifying GSC Access...")
+        site_url = find_verified_property(search_service)
+        if not site_url:
+            print("Aborting: No access to wordsolverx.com property found.")
+            return
+        print(f"Using GSC Property: {site_url}\n")
         
         # 1. Generate URLs
         static_urls = read_static_urls()
@@ -179,7 +215,7 @@ def main():
             batch_rows = []
             for url in batch:
                 print(f"Inspecting: {url}")
-                row = inspect_url(search_service, url)
+                row = inspect_url(search_service, url, site_url)
                 batch_rows.append(row)
                 all_rows.append(row)
                 time.sleep(1) 
