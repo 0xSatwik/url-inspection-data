@@ -236,8 +236,15 @@ def main():
         # 4. Final CSV Export if in CSV mode
         if csv_mode:
             import csv
+            
+            # Ensure reports directory exists
+            reports_dir = "reports"
+            if not os.path.exists(reports_dir):
+                os.makedirs(reports_dir)
+                
             today_str = datetime.now().strftime("%d%b-%Y").lower()
-            csv_filename = f"wordsolverx-{today_str}.csv"
+            csv_filename = os.path.join(reports_dir, f"wordsolverx-{today_str}.csv")
+            
             with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)

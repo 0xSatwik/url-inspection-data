@@ -33,10 +33,16 @@ jobs:
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: python inspect_urls.py
 
-      - name: Upload CSV Results
+      - name: Commit and Push CSV Reports
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: url-inspection-csv
-          path: "*.csv"
-          if-no-files-found: ignore
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add reports/
+          # Check if there are changes before committing
+          if git diff --staged --quiet; then
+            print("No changes to commit.")
+          else
+            git commit -m "Add daily URL inspection report [skip ci]"
+            git push
+          fi
