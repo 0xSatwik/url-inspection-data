@@ -7,14 +7,12 @@ from googleapiclient.discovery import build
 import google.auth
 
 # Configuration
-DRIVE_FOLDER_ID = "1hPHBUkyyknTGc5NG45lWHhlXNGBhCmGd"
 SITE_URL = "https://wordsolverx.com/"
 PAGES_FILE = "pages.txt"
 
 # Scopes
 SCOPES = [
     'https://www.googleapis.com/auth/webmasters.readonly',
-    'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/spreadsheets'
 ]
 
@@ -53,42 +51,36 @@ def read_static_urls():
         urls = [line.strip() for line in f if line.strip()]
     return urls
 
-def create_google_sheet(drive_service, sheets_service):
+def create_google_sheet(sheets_service):
     today_str = datetime.now().strftime("%d%b-%Y").lower()
     sheet_title = f"wordsolverx-{today_str}"
     
-    file_metadata = {
-        'name': sheet_title,
-        'parents': [DRIVE_FOLDER_ID],
-        'mimeType': 'application/vnd.google-apps.spreadsheet',
+    spreadsheet = {
+        'properties': {
+            'title': sheet_title
+        }
     }
     
-    # Create the spreadsheet in the specific folder
-    try:
-        file = drive_service.files().create(body=file_metadata, fields='id').execute()
-        spreadsheet_id = file.get('id')
-        print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
-        
-        # Initialize the sheet with headers
-        headers = [
-            "Inspection Date", "URL", "Verdict", "Coverage State", 
-            "Robots Txt State", "Indexing State", "Last Crawl Time", 
-            "Page Fetch State", "Google Canonical", "User Canonical"
-        ]
-        
-        sheets_service.spreadsheets().values().append(
-            spreadsheetId=spreadsheet_id,
-            range="Sheet1!A1",
-            valueInputOption="RAW",
-            body={"values": [headers]}
-        ).execute()
-        
-        return spreadsheet_id
-    except Exception as e:
-        if "File not found" in str(e):
-            print(f"CRITICAL ERROR: Folder ID {DRIVE_FOLDER_ID} not found or access denied.")
-            print("Please ensure the Service Account email is added as an 'Editor' to the Google Drive folder.")
-        raise e
+    # Create the spreadsheet directly
+    file = sheets_service.spreadsheets().create(body=spreadsheet, fields='spreadsheetId').execute()
+    spreadsheet_id = file.get('spreadsheetId')
+    print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
+    
+    # Initialize the sheet with headers
+    headers = [
+        "Inspection Date", "URL", "Verdict", "Coverage State", 
+        "Robots Txt State", "Indexing State", "Last Crawl Time", 
+        "Page Fetch State", "Google Canonical", "User Canonical"
+    ]
+    
+    sheets_service.spreadsheets().values().append(
+        spreadsheetId=spreadsheet_id,
+        range="Sheet1!A1",
+        valueInputOption="RAW",
+        body={"values": [headers]}
+    ).execute()
+    
+    return spreadsheet_id
 
 def inspect_url(search_service, url):
     try:
@@ -125,7 +117,6 @@ def main():
     try:
         creds = get_credentials()
         search_service = build('searchconsole', 'v1', credentials=creds)
-        drive_service = build('drive', 'v3', credentials=creds)
         sheets_service = build('sheets', 'v4', credentials=creds)
         
         # 1. Generate URLs
@@ -146,7 +137,7 @@ def main():
             return
 
         # 2. Create Spreadsheet
-        spreadsheet_id = create_google_sheet(drive_service, sheets_service)
+        spreadsheet_id = create_google_sheet(sheets_service)
         
         # 3. Inspect and Append
         batch_size = 5 # Small batches to avoid timeout and show progress
