@@ -14,7 +14,7 @@ PAGES_FILE = "pages.txt"
 SCOPES = [
     'https://www.googleapis.com/auth/webmasters.readonly',
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive.file'
+    'https://www.googleapis.com/auth/drive'
 ]
 
 def get_credentials():
@@ -22,11 +22,15 @@ def get_credentials():
     if not creds_json:
         # For local testing, look for credentials.json
         if os.path.exists('credentials.json'):
-            return service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+            creds = service_account.Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+            print(f"Using credentials from file: {creds.service_account_email}")
+            return creds
         else:
             raise Exception("GOOGLE_CREDENTIALS environment variable not set and credentials.json not found.")
     
     creds_dict = json.loads(creds_json)
+    print(f"Using Service Account: {creds_dict.get('client_email')}")
+    print(f"Project ID: {creds_dict.get('project_id')}")
     return service_account.Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
 def generate_dynamic_urls():
@@ -66,9 +70,10 @@ def create_google_sheet(sheets_service):
     try:
         file = sheets_service.spreadsheets().create(body=spreadsheet, fields='spreadsheetId').execute()
         spreadsheet_id = file.get('spreadsheetId')
-        print(f"Created new spreadsheet: {sheet_title} (ID: {spreadsheet_id})")
+        print(f"Created new spreadsheet: {sheet_title}")
+        print(f"URL: https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit")
         
-        # Initialize the sheet with headers
+        # Initialize the sheet with headers (same as before)
         headers = [
             "Inspection Date", "URL", "Verdict", "Coverage State", 
             "Robots Txt State", "Indexing State", "Last Crawl Time", 
@@ -86,12 +91,13 @@ def create_google_sheet(sheets_service):
     except Exception as e:
         if "403" in str(e):
             print("\n" + "!"*50)
-            print("PERMISSION ERROR (403): The Service Account missing permissions.")
-            print("ACTION REQUIRED:")
-            print("1. Go to Google Cloud Console -> APIs & Services -> Library.")
-            print("2. Search for 'Google Sheets API' and ensure it's ENABLED.")
-            print("3. Search for 'Google Drive API' and ensure it's ALSO ENABLED (required for creating sheets).")
-            print("4. Ensure your Service Account belongs to the SAME project where you enabled these APIs.")
+            print("PERMISSION ERROR (403) STILL PERSISTS.")
+            print("If you have enabled APIs, it might be that the Service Account has NO access to create files.")
+            print("TRY THIS:")
+            print("1. Go to Google Cloud Console -> IAM & Admin -> IAM.")
+            print("2. Find your Service Account in the list.")
+            print("3. Click 'Edit Manager' (Pencil icon).")
+            print("4. Add the role 'Editor' (or at least 'Project Viewer') to the Service Account.")
             print("!"*50 + "\n")
         raise e
 
